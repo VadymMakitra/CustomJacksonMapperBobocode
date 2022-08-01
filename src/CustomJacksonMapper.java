@@ -1,3 +1,6 @@
+// Create the methods that convert a value from JSON to Java Object
+// if the new fields are added method should accept them and set values to this field.
+
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.time.LocalDate;
@@ -27,12 +30,14 @@ public class CustomJacksonMapper {
         System.out.println(user);
     }
 
-    private static <T> T jsonToObject(String json, Class<T> clazz) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+    private static <T> T jsonToObject(String json, Class<T> clazz) throws NoSuchMethodException, InvocationTargetException,
+        InstantiationException, IllegalAccessException {
         Constructor<T> obj = clazz.getConstructor();
         T convertedObj = obj.newInstance();
         Arrays.stream(clazz.getDeclaredFields()).forEach((field -> {
             String searched = "";
-            if (field.getGenericType().getTypeName().equals(String.class.getTypeName()) || field.getGenericType().getTypeName().equals(LocalDate.class.getTypeName())) {
+            if (field.getGenericType().getTypeName().equals(String.class.getTypeName())
+                || field.getGenericType().getTypeName().equals(LocalDate.class.getTypeName())) {
                 Pattern pattern = Pattern.compile("\\s?\"" + field.getName() + "\":\\s?\"?.\\w+@?\\w+.?\\w+.?\\w+");
                 Matcher patternMatcher = pattern.matcher(json);
                 if (patternMatcher.find()) {
