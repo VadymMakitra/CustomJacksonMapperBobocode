@@ -25,15 +25,15 @@ public class CustomJacksonMapper {
         T convertedObj = obj.newInstance();
         Arrays.stream(clazz.getDeclaredFields()).forEach((field -> {
             Pattern pattern = Pattern.compile("\\s?\"" + field.getName() +"\":\\s?\".\\w+@?\\w+.?\\w+");
-            Matcher pet = pattern.matcher(json);
-            String serched = "";
-            if (pet.find()) {
-                serched = pet.group(0);
-                serched = serched.split("\\s?\"" + field.getName() + "\"\\s?:\\s?\"")[1];
+            Matcher patternMatcher = pattern.matcher(json);
+            String searched = "";
+            if (patternMatcher.find()) {
+                searched = patternMatcher.group(0);
+                searched = searched.split("\\s?\"" + field.getName() + "\"\\s?:\\s?\"")[1];
             }
             try {
                 field.setAccessible(true);
-                field.set(convertedObj, serched);
+                field.set(convertedObj, searched);
             } catch (IllegalAccessException e) {
                 e.printStackTrace();
             }
