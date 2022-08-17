@@ -50,11 +50,12 @@ public class CustomJacksonMapper {
 
         System.out.println(user);
     }
+
     @SuppressWarnings("unchecked")
     private static <T> T jsonToObject(String json, Class<T> clazz) throws NoSuchMethodException, InvocationTargetException,
             InstantiationException, IllegalAccessException {
 
-        if(json.isEmpty()){
+        if (json.isEmpty()) {
             throw new IllegalArgumentException("JSON shouldn't be empty");
         }
 
@@ -63,11 +64,10 @@ public class CustomJacksonMapper {
 
         Arrays.stream(clazz.getDeclaredFields()).forEach((field -> {
             String searched = "";
-
             if (field.getGenericType().getTypeName().equals(String.class.getTypeName())
                     || field.getGenericType().getTypeName().equals(LocalDate.class.getTypeName())) {
-                Pattern pattern = Pattern.compile("\\s?\"" + field.getName() + "\":\\s?\"?.\\w+@?\\w+.?\\w+.?\\w+");
-                Matcher patternMatcher = pattern.matcher(json);
+                Matcher patternMatcher = patternHelper("\\s?\""
+                        + field.getName() + "\":\\s?\"?.\\w+@?\\w+.?\\w+.?\\w+", json);
                 if (patternMatcher.find()) {
                     searched = patternMatcher.group(0);
                     searched = searched.split("\\s?\"" + field.getName() + "\"\\s?:\\s?\"")[1];
@@ -92,8 +92,7 @@ public class CustomJacksonMapper {
                     || field.getType().equals(Long.TYPE)
                     || field.getType().equals(Double.TYPE)
                     || field.getType().equals(Float.TYPE)) {
-                Pattern pattern = Pattern.compile("\\s?\"" + field.getName() + "\":\\s?[0-9]+");
-                Matcher patternMatcher = pattern.matcher(json);
+                Matcher patternMatcher = patternHelper("\\s?\"" + field.getName() + "\":\\s?[0-9]+", json);
                 if (patternMatcher.find()) {
                     searched = patternMatcher.group(0);
                     searched = searched.split("\\s?\"" + field.getName() + "\"\\s?:\\s?")[1];
@@ -101,7 +100,7 @@ public class CustomJacksonMapper {
                 try {
                     field.setAccessible(true);
                     if (field.getGenericType().getTypeName().equals(Integer.class.getTypeName())
-                        || field.getType().equals(Integer.TYPE)) {
+                            || field.getType().equals(Integer.TYPE)) {
                         field.set(convertedObj, Integer.parseInt(searched));
                     } else if (field.getGenericType().getTypeName().equals(Long.class.getTypeName())
                             || field.getType().equals(Long.TYPE)) {
@@ -109,7 +108,7 @@ public class CustomJacksonMapper {
                     } else if (field.getGenericType().getTypeName().equals(Double.class.getTypeName())
                             || field.getType().equals(Double.TYPE)) {
                         field.set(convertedObj, Double.valueOf(searched));
-                    }else if (field.getGenericType().getTypeName().equals(Float.class.getTypeName())
+                    } else if (field.getGenericType().getTypeName().equals(Float.class.getTypeName())
                             || field.getType().equals(Float.TYPE)) {
                         field.set(convertedObj, Float.valueOf(searched));
                     }
@@ -118,8 +117,8 @@ public class CustomJacksonMapper {
                 }
 
             } else if (field.getGenericType().getTypeName().equals(LocalDateTime.class.getTypeName())) {
-                Pattern pattern = Pattern.compile("\\s?\"" + field.getName() + "\":\\s?\"?.\\w+@?\\w+.?\\w+.?\\w+\\s?\\w+:?\\w?.");
-                Matcher patternMatcher = pattern.matcher(json);
+                Matcher patternMatcher = patternHelper("\\s?\"" + field.getName() +
+                        "\":\\s?\"?.\\w+@?\\w+.?\\w+.?\\w+\\s?\\w+:?\\w?.", json);
                 if (patternMatcher.find()) {
                     searched = patternMatcher.group(0);
                     searched = searched.split("\\s?\"" + field.getName() + "\"\\s?:\\s?\"")[1];
@@ -127,15 +126,19 @@ public class CustomJacksonMapper {
                 try {
                     field.setAccessible(true);
                     field.set(convertedObj, LocalDateTime.parse(searched, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
-                    User user = new User();
                 } catch (IllegalAccessException e) {
                     e.printStackTrace();
                 }
             } else {
                 try {
-                    if(field.getType().getConstructor().newInstance() instanceof Collection) {
+                    Constructor<?> constructor;
+                    if (field.getType().equals(List.class) || field.getType().equals(Collection.class)) {
+                        constructor = ArrayList.class.getConstructor();
+                    } else {
+                        constructor = field.getType().getConstructor();
+                    }
+                    if (constructor.newInstance() instanceof Collection) {
                         try {
-                            Constructor<?> constructor = field.getType().getConstructor();
                             Object o = constructor.newInstance();
                             Method method = field.getType().getMethod("add", Object.class);
                             Pattern pattern = Pattern.compile("\"" + field.getName() + "\"\\s?:\\s?\\[[\\s?\\S]+]");
@@ -144,7 +147,7 @@ public class CustomJacksonMapper {
                                 searched = patternMatcher.group(0);
                                 searched = searched.split("\\s?\"" + field.getName() + "\"\\s?:\\s?\\[")[1];
                                 Arrays.stream(searched.split("},")).forEach(element -> {
-                                    Class<?> listClass = ((Class<?>)((ParameterizedType)field.getGenericType()).getActualTypeArguments()[0]);
+                                    Class<?> listClass = ((Class<?>) ((ParameterizedType) field.getGenericType()).getActualTypeArguments()[0]);
                                     try {
                                         T o1 = (T) listClass.getConstructor().newInstance();
                                         o1 = (T) jsonToObject(element, o1.getClass());
@@ -166,17 +169,16 @@ public class CustomJacksonMapper {
                                 | InstantiationException e) {
                             e.printStackTrace();
                         }
-                    }
-                    else {
-                        Pattern pattern = Pattern.compile("\\s?\"" + field.getName() + "\"\\s?:\\s?\\{[\\s\\w\\d\\D]*}");
-                        Matcher patternMatcher = pattern.matcher(json);
+                    } else {
+                        Matcher patternMatcher = patternHelper("\\s?\"" + field.getName()
+                                + "\"\\s?:\\s?\\{[\\s\\w\\d\\D]*}", json);
                         if (patternMatcher.find()) {
                             searched = patternMatcher.group(0);
-                            searched = searched.split("\\s?\"" +field.getName() + "\"\\s?:\\s?")[1];
+                            searched = searched.split("\\s?\"" + field.getName() + "\"\\s?:\\s?")[1];
                         }
                         try {
                             field.setAccessible(true);
-                            field.set(convertedObj ,jsonToObject(searched, field.getType()));
+                            field.set(convertedObj, jsonToObject(searched, field.getType()));
                         } catch (NoSuchMethodException
                                 | InvocationTargetException
                                 | InstantiationException
@@ -184,15 +186,20 @@ public class CustomJacksonMapper {
                             e.printStackTrace();
                         }
                     }
-                } catch (InstantiationException 
-                        | IllegalAccessException 
-                        | InvocationTargetException 
+                } catch (InstantiationException
+                        | IllegalAccessException
+                        | InvocationTargetException
                         | NoSuchMethodException e) {
                     e.printStackTrace();
                 }
             }
         }));
         return convertedObj;
+    }
+
+    private static Matcher patternHelper(String regex, String json) {
+        Pattern pattern = Pattern.compile(regex);
+        return pattern.matcher(json);
     }
 
     private static class User {
