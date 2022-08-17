@@ -1,12 +1,11 @@
 // Create the methods that convert a value from JSON to Java Object
 // if the new fields are added method should accept them and set values to this field.
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -32,14 +31,26 @@ public class CustomJacksonMapper {
                 "      \"name\":\"Lviv\",\n" +
                 "      \"longitude\":34.3,\n" +
                 "      \"latitude\":35.6\n" +
-                "   }\n" +
+                "   },\n" +
+                "   \"cityList\":[\n" +
+                "      {\n" +
+                "         \"name\":\"Lviv\",\n" +
+                "         \"longitude\":34.3,\n" +
+                "         \"latitude\":35.6\n" +
+                "      },\n" +
+                "      {\n" +
+                "         \"name\":\"Kiev\",\n" +
+                "         \"longitude\":45.3,\n" +
+                "         \"latitude\":44.6\n" +
+                "      }\n" +
+                "   ]\n" +
                 "}";
 
         var user = jsonToObject(json, User.class);
 
         System.out.println(user);
     }
-
+    @SuppressWarnings("unchecked")
     private static <T> T jsonToObject(String json, Class<T> clazz) throws NoSuchMethodException, InvocationTargetException,
             InstantiationException, IllegalAccessException {
 
@@ -116,23 +127,67 @@ public class CustomJacksonMapper {
                 try {
                     field.setAccessible(true);
                     field.set(convertedObj, LocalDateTime.parse(searched, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
+                    User user = new User();
                 } catch (IllegalAccessException e) {
                     e.printStackTrace();
                 }
             } else {
-                Pattern pattern = Pattern.compile("\\s?\"" + field.getName() + "\"\\s?:\\s?\\{[\\s\\w\\d\\D]*}");
-                Matcher patternMatcher = pattern.matcher(json);
-                if (patternMatcher.find()) {
-                    searched = patternMatcher.group(0);
-                    searched = searched.split("\\s?\"" +field.getName() + "\"\\s?:\\s?")[1];
-                }
                 try {
-                    field.setAccessible(true);
-                    field.set(convertedObj ,jsonToObject(searched, field.getType()));
-                } catch (NoSuchMethodException
-                        | InvocationTargetException
-                        | InstantiationException
-                        | IllegalAccessException e) {
+                    if(field.getType().getConstructor().newInstance() instanceof Collection) {
+                        try {
+                            Constructor<?> constructor = field.getType().getConstructor();
+                            Object o = constructor.newInstance();
+                            Method method = field.getType().getMethod("add", Object.class);
+                            Pattern pattern = Pattern.compile("\"" + field.getName() + "\"\\s?:\\s?\\[[\\s?\\S]+]");
+                            Matcher patternMatcher = pattern.matcher(json);
+                            if (patternMatcher.find()) {
+                                searched = patternMatcher.group(0);
+                                searched = searched.split("\\s?\"" + field.getName() + "\"\\s?:\\s?\\[")[1];
+                                Arrays.stream(searched.split("},")).forEach(element -> {
+                                    Class<?> listClass = ((Class<?>)((ParameterizedType)field.getGenericType()).getActualTypeArguments()[0]);
+                                    try {
+                                        T o1 = (T) listClass.getConstructor().newInstance();
+                                        o1 = (T) jsonToObject(element, o1.getClass());
+                                        method.invoke(o, o1);
+                                    } catch (InstantiationException
+                                            | IllegalAccessException
+                                            | InvocationTargetException
+                                            | NoSuchMethodException e) {
+                                        e.printStackTrace();
+                                    }
+
+                                });
+                            }
+                            field.setAccessible(true);
+                            field.set(convertedObj, o);
+                        } catch (NoSuchMethodException
+                                | InvocationTargetException
+                                | IllegalAccessException
+                                | InstantiationException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    else {
+                        Pattern pattern = Pattern.compile("\\s?\"" + field.getName() + "\"\\s?:\\s?\\{[\\s\\w\\d\\D]*}");
+                        Matcher patternMatcher = pattern.matcher(json);
+                        if (patternMatcher.find()) {
+                            searched = patternMatcher.group(0);
+                            searched = searched.split("\\s?\"" +field.getName() + "\"\\s?:\\s?")[1];
+                        }
+                        try {
+                            field.setAccessible(true);
+                            field.set(convertedObj ,jsonToObject(searched, field.getType()));
+                        } catch (NoSuchMethodException
+                                | InvocationTargetException
+                                | InstantiationException
+                                | IllegalAccessException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                } catch (InstantiationException 
+                        | IllegalAccessException 
+                        | InvocationTargetException 
+                        | NoSuchMethodException e) {
                     e.printStackTrace();
                 }
             }
@@ -140,7 +195,7 @@ public class CustomJacksonMapper {
         return convertedObj;
     }
 
-    static class User {
+    private static class User {
         private String firstName;
         private String lastName;
         private String phoneNumber;
@@ -157,6 +212,7 @@ public class CustomJacksonMapper {
         private float primitiveFloat;
         private long primitiveLong;
         private City city;
+        private LinkedList<City> cityList;
 
         public User() {
         }
@@ -180,10 +236,11 @@ public class CustomJacksonMapper {
                     ", primitiveFloat=" + primitiveFloat +
                     ", primitiveLong=" + primitiveLong +
                     ", city=" + city +
+                    ", cityList=" + cityList +
                     '}';
         }
 
-        static class City {
+        private static class City {
             private String name;
             private float longitude;
             private float latitude;
